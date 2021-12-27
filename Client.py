@@ -1,5 +1,6 @@
 import socket
 import struct
+import keyboard
 
 BUFFER_SIZE=2048
 PORT = 13117
@@ -25,13 +26,15 @@ class Client:
 
 
     def connect_server_tcp(self,address):
-        print("here")
         client_tcp_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_tcp_socket.connect((address[0],address[1]))
+        client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
         while True:
+            message = client_tcp_socket.recv(BUFFER_SIZE)
+            print(message.decode('utf-8'))
+            my_answer = keyboard.read_key()
+            client_tcp_socket.send(bytes(my_answer + "\n", "utf-8"))
 
-            client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
 
 
-
-Client("noni")
+Client("noni3")
