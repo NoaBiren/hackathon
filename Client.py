@@ -1,5 +1,8 @@
 import socket
 import struct
+import threading
+import msvcrt
+
 import keyboard
 
 BUFFER_SIZE=2048
@@ -26,14 +29,20 @@ class Client:
 
 
     def connect_server_tcp(self,address):
-        client_tcp_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_tcp_socket.connect((address[0],address[1]))
-        client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
+        self.client_tcp_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_tcp_socket.connect((address[0],address[1]))
+        self.client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
+        t= threading.Thread(target=self.get_messages).start()
         while True:
-            message = client_tcp_socket.recv(BUFFER_SIZE)
+            # message = self.client_tcp_socket.recv(BUFFER_SIZE)
+            # print(message.decode('utf-8'))
+            my_answer = input()
+            self.client_tcp_socket.send(bytes(my_answer + "\n", "utf-8"))
+
+    def get_messages(self):
+        while True:
+            message = self.client_tcp_socket.recv(BUFFER_SIZE)
             print(message.decode('utf-8'))
-            my_answer = keyboard.read_key()
-            client_tcp_socket.send(bytes(my_answer + "\n", "utf-8"))
 
 
 

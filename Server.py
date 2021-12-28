@@ -1,5 +1,5 @@
 ##https://github.com/NoaBiren/hackathon.git
-
+import select
 import socket
 import struct
 import threading
@@ -17,6 +17,7 @@ class Server:
         self.tcp_port=tcp_port
         self.IP=IP
         self.clients={}
+        self.num=0
         self.num_clients_lock = threading.Lock()
         self.second_client_event = threading.Event()
         threading.Thread(target=self.udp_handler).start()
@@ -42,14 +43,19 @@ class Server:
 
 
     def create_tcp_connection(self):
-        server_tcp_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_tcp_socket.bind((self.IP,self.tcp_port))
-        server_tcp_socket.listen(2)
+        self.server_tcp_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_tcp_socket.bind((self.IP,self.tcp_port))
+        self.server_tcp_socket.listen(2)
         while len(self.clients)<2:
-            client,ip=server_tcp_socket.accept()
-            print("tcp success")
+            client,ip=self.server_tcp_socket.accept()
             self.clients[client]=""
             threading.Thread(target=self.new_client_socket_handler,args=(client,ip)).start()
+        self.Flag=False
+        while (len(self.clients)==2 and self.Flag==False):
+            if (self.num!=0):
+                self.Flag=True
+                for cli in self.clients.keys():
+                    cli.send(bytes(self.game_over_message, 'utf-8'))
 
 
 
@@ -75,14 +81,37 @@ class Server:
         # print(group_names[0])
         message = "Welcome to Quick Maths!\nPlayer 1: "+ group_names[0]+ "\nPlayer 2: "+group_names[1]+"\nPlease answer the following question as fast as you can:\nHow much is "+self.equation[1]+"?\nanswer: "
         client.send(bytes(message,'utf-8'))
-        #TODO timeout after 10 sec without answer
-        answer = client.recv(BUFFER_SIZE).decode("utf-8")
-        if int(answer)==self.equation[0]:#correct answer
-            #TODO how do I know the name of the winning team
-            message = "Game over!\nThe correct answer was " +str(self.equation[0]) + "!\nCongratulations to the winner: "+self.clients[client]+""
-            print(self.clients)
+        ## readable, _, _ = select.select(list(self.clients.keys()), [], [])
+        # for cli in readable:
+        ready = select.select([client], [], [], 10)
+        if ready[0]:
+            answer = client.recv(BUFFER_SIZE).decode("utf-8")
+           # if answer:
+            self.num_clients_lock.acquire()
+            self.num+=1
+            if self.num==1:
+                self.first_answered = self.clients[client]
+                for cli in self.clients.keys():
+                    if cli!=client:
+                        self.not_first_answered = self.clients[cli]
+                self.num_clients_lock.release()
+            else:
+                self.num=0
+                self.not_first_answered = self.clients[client]
+                self.num_clients_lock.release()
+            if int(answer)==self.equation[0]:#correct answer
+                #TODO how do I know the name of the winning team
+                self.game_over_message = "Game over!\nThe correct answer was " +str(self.equation[0]) + "!\nCongratulations to the winner: "+self.first_answered+""
+                #client.send(bytes(message, 'utf-8'))
+            else:
+                self.game_over_message = "Game over!\nThe correct answer was " + str(self.equation[0]) + "!\nCongratulations to the winner: " + self.not_first_answered + ""
+            #client.send(bytes(message, 'utf-8'))
+            # else:
+            #     message = "Game over!\nThe correct answer was " + str(self.equation[0]) + "!\nCongratulations to the winner: " + self.not_first_answered + ""
+            #     client.send(bytes(message, 'utf-8'))
+        else:
+            message = "Game over!\nThe correct answer was " + str(self.equation[0])
             client.send(bytes(message, 'utf-8'))
-
 
 
     def formulate_equation(self):
