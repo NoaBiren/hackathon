@@ -3,42 +3,55 @@ import socket
 import struct
 import sys
 import threading
-import msvcrt
+# import getch
 import time
 from multiprocessing import Process
 import keyboard
+from scapy.arch import get_if_addr
+
 
 BUFFER_SIZE=2048
 PORT = 13117
+IP = get_if_addr("eth1")
 
 class Client:
 
     #open client socket
     def __init__(self,group_name):
         self.group_name=group_name
-        client_udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        client_udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        client_udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        print("Client started, listening for offer requests...")
-        client_udp_socket.bind(("", PORT))
     #looking for a server
         while True:
-            try:
+            # try:
+                client_udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                client_udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                client_udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                client_udp_socket.bind(('.'.join(IP.split(".")[:2])+".255.255", PORT))
+                print("Client started, listening for offer requests...")
                 pack, address = client_udp_socket.recvfrom(BUFFER_SIZE)#buffer_size
                 print("Received offer from " + address[0]+", attempting to connect..")
-                message = struct.unpack(">IbH",pack)
-                self.connect_server_tcp(('127.0.0.1',message[2]))
-            except Exception as e:
-                print(e)
+                try:
+                    message = struct.unpack(">IbH",pack)
+                except:
+                    message = struct.unpack("IbH",pack)
+                client_udp_socket.close()
+                self.connect_server_tcp((address[0],message[2]))
+            # except Exception as e:
+            #     pass
 
 
     def connect_server_tcp(self,address):
         self.client_tcp_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_tcp_socket.connect((address[0],address[1]))
-        self.client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
+        # self.client_tcp_socket.settimeout(11)
+        try:
+            if address[0] == "172.1.0.9":
+                return
+            self.client_tcp_socket.connect((address[0],address[1]))
+            self.client_tcp_socket.send(bytes(self.group_name+"\n", "utf-8"))
+        except:
+            return
         #equation message
-        message = self.client_tcp_socket.recv(BUFFER_SIZE).decode("utf-8")
-        print(message)
+        # message = self.client_tcp_socket.recv(BUFFER_SIZE).decode("utf-8")
+        # print(message)
         ###
         t= threading.Thread(target=self.get_messages).start()
         t2=threading.Thread(target=self.send_messages).start()
@@ -79,12 +92,15 @@ class Client:
                 message = self.client_tcp_socket.recv(BUFFER_SIZE).decode('utf-8')
                 if message!="":
                     print(message)
-            except:
+            except Exception as e:
                 pass
 
     def send_messages(self):
-        my_answer = input()
-        self.client_tcp_socket.send(bytes(my_answer + "\n", "utf-8"))
+        try:
+            my_answer = input()
+            self.client_tcp_socket.send(bytes(my_answer + "\n", "utf-8"))
+        except Exception as e:
+            pass
         ####
 
         # time.sleep(10)
@@ -99,4 +115,4 @@ class Client:
 
 
 
-Client("noni3")
+Client("d")
