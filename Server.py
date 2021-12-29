@@ -18,12 +18,12 @@ class Server:
         self.IP=IP
         self.clients={}
         self.num=0
+        self.game_over=False
+        print("Server started, listening on IP address " + self.IP)
+        threading.Thread(target=self.udp_handler).start()
         self.num_clients_lock = threading.Lock()
         self.second_client_event = threading.Event()
-        threading.Thread(target=self.udp_handler).start()
-        print("Server started, listening on IP address " + self.IP)
 
-        self.create_tcp_connection()
 
 
 
@@ -46,21 +46,31 @@ class Server:
         self.server_tcp_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_tcp_socket.bind((self.IP,self.tcp_port))
         self.server_tcp_socket.listen(2)
-        while len(self.clients)<2:
-            client,ip=self.server_tcp_socket.accept()
-            self.clients[client]=""
-            threading.Thread(target=self.new_client_socket_handler,args=(client,ip)).start()
-        self.Flag=False
-        while (len(self.clients)==2 and self.Flag==False):
-            if (self.num!=0):
-                self.Flag=True
-                for cli in self.clients.keys():
-                    cli.send(bytes(self.game_over_message, 'utf-8'))
+        while True:
+            while len(self.clients)<2:
+                client,ip=self.server_tcp_socket.accept()
+                self.clients[client]=""
+                threading.Thread(target=self.new_client_socket_handler,args=(client,ip)).start()
+            self.Flag=False
+            while (len(self.clients)==2 and self.Flag==False):
+                # print("before")
+                if (self.num!=0 or self.game_over==True):
+                    # print("after")
+                    self.Flag=True
+                    self.game_over=False
+                    self.num=0
+                    for cli in self.clients.keys():
+                        cli.send(bytes(self.game_over_message, 'utf-8'))
+                        time.sleep(0.1)
+                        cli.shutdown(socket.SHUT_RDWR)
+                        cli.close()
+                        #cli.close()
+                    self.clients= {}
+                time.sleep(0.1)
 
 
 
     def new_client_socket_handler(self,client,ip):
-        #print("gal haben zona")
         #while True:
             try:
                 name = client.recv(BUFFER_SIZE).decode("utf-8")
@@ -78,15 +88,11 @@ class Server:
     def game_mode(self,client):
         time.sleep(2) #TODO change to 10
         group_names = list(self.clients.values())
-        # print(group_names[0])
         message = "Welcome to Quick Maths!\nPlayer 1: "+ group_names[0]+ "\nPlayer 2: "+group_names[1]+"\nPlease answer the following question as fast as you can:\nHow much is "+self.equation[1]+"?\nanswer: "
         client.send(bytes(message,'utf-8'))
-        ## readable, _, _ = select.select(list(self.clients.keys()), [], [])
-        # for cli in readable:
         ready = select.select([client], [], [], 10)
         if ready[0]:
             answer = client.recv(BUFFER_SIZE).decode("utf-8")
-           # if answer:
             self.num_clients_lock.acquire()
             self.num+=1
             if self.num==1:
@@ -96,22 +102,16 @@ class Server:
                         self.not_first_answered = self.clients[cli]
                 self.num_clients_lock.release()
             else:
-                self.num=0
                 self.not_first_answered = self.clients[client]
                 self.num_clients_lock.release()
             if int(answer)==self.equation[0]:#correct answer
-                #TODO how do I know the name of the winning team
                 self.game_over_message = "Game over!\nThe correct answer was " +str(self.equation[0]) + "!\nCongratulations to the winner: "+self.first_answered+""
-                #client.send(bytes(message, 'utf-8'))
             else:
                 self.game_over_message = "Game over!\nThe correct answer was " + str(self.equation[0]) + "!\nCongratulations to the winner: " + self.not_first_answered + ""
-            #client.send(bytes(message, 'utf-8'))
-            # else:
-            #     message = "Game over!\nThe correct answer was " + str(self.equation[0]) + "!\nCongratulations to the winner: " + self.not_first_answered + ""
-            #     client.send(bytes(message, 'utf-8'))
+
         else:
-            message = "Game over!\nThe correct answer was " + str(self.equation[0])
-            client.send(bytes(message, 'utf-8'))
+            self.game_over = True
+            self.game_over_message = "Game over!\nThe correct answer was " + str(self.equation[0])
 
 
     def formulate_equation(self):
@@ -134,5 +134,5 @@ class Server:
             string="" + str(first) + "+" + str(second)
             return (answer,string)
 
-Server('127.0.0.1',2512)
-
+s = Server('127.0.0.1',2512)
+s.create_tcp_connection()
